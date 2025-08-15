@@ -25,16 +25,13 @@ warn-*.txt
 *.pkg
 # (we're ignoring dist/, but you can still build Electron locally—just don't commit it)
 
-# App runtime data (should live outside the repo; ignore if created here)
-**/project_data.json
-**/anki.json
-
 # ---------- Node/Electron ----------
 electron/node_modules/
 electron/dist/
 electron/out/
 electron/build/
 electron/.cache/
+electron/projecttracker-backend.exe
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -44,4 +41,4 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
-electron/projecttracker-backend.exe
+
