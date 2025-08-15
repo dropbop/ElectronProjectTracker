@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, abort, session
 import os
+import sys
 from operator import itemgetter
 from datetime import datetime, timedelta
 from data_handler import (
@@ -32,16 +33,27 @@ except ImportError:
 # --- End Anki Imports ---
 
 
-app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your_default_secret_key')
+base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(base_dir, "templates"),
+    static_folder=os.path.join(base_dir, "static"),
+)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_default_secret_key")
 
-STATIC_FOLDER = os.path.join(app.root_path, 'static')
+STATIC_FOLDER = app.static_folder
 
 
 @app.context_processor
 def inject_css_and_static_folder():
     """Injects CSS files and STATIC_FOLDER into the template context."""
     return {**utils.inject_css_files(STATIC_FOLDER), 'STATIC_FOLDER': STATIC_FOLDER}
+
+
+@app.route("/__health")
+def health():
+    """Simple health check endpoint for Electron to poll."""
+    return "ok"
 
 
 @app.route('/set_style', methods=['POST'])
@@ -432,4 +444,5 @@ if __name__ == "__main__":
     # Example: if anki_enabled and anki.ANKI_DATA_FILE and not os.path.exists(anki.ANKI_DATA_FILE):
     #     anki.save_anki_data({"cards": []}) # Create empty Anki file
 
-    app.run(debug=True)
+    port = int(os.environ.get("PROJECTTRACKER_PORT", 0))
+    app.run(host="127.0.0.1", port=port, debug=False)

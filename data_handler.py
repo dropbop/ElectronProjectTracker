@@ -3,7 +3,9 @@ import os
 import uuid
 from datetime import datetime
 
-DATA_FILE = "project_data.json"  # Moved to a constant
+DATA_DIR = os.getenv("PROJECTTRACKER_DATA_DIR", os.getcwd())
+os.makedirs(DATA_DIR, exist_ok=True)
+DATA_FILE = os.path.join(DATA_DIR, "project_data.json")  # Moved to a constant
 
 def load_data():
     """Loads project data from the JSON file."""

@@ -1,0 +1,29 @@
+{
+  "name": "projecttracker-electron",
+  "version": "0.1.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "get-port": "^5.1.1"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/projecttracker-backend.exe",
+        "to": "."
+      }
+    ]
+  }
+}
