@@ -8,7 +8,8 @@ from .data_handler import (
     create_task, update_task, get_all_tasks, add_project_update, delete_project_update,
     load_data  # Assuming load_data is in data_handler.py
 )
-import src.utils as utils # Import the utils module
+from . import data_handler  # For accessing module-level variables like DATA_FILE
+from . import utils  # Import the utils module
 
 # --- Anki Imports ---
 # Assuming these functions exist in an 'anki.py' file or similar module
@@ -17,6 +18,7 @@ try:
         load_anki_data, save_anki_data, create_card, get_card, update_card,
         delete_card, get_due_cards, process_card_review
     )
+    from . import anki  # For accessing module-level variables like ANKI_FILE
     anki_enabled = True
 except ImportError:
     print("WARNING: Anki module not found. Anki features will be disabled.")
@@ -441,7 +443,7 @@ if __name__ == "__main__":
     # Ensure data files exist (optional, depends on data_handler implementation)
     # Example: if data_handler.DATA_FILE and not os.path.exists(data_handler.DATA_FILE):
     #     data_handler.save_data({"projects": [], "tasks": []}) # Create empty file
-    # Example: if anki_enabled and anki.ANKI_DATA_FILE and not os.path.exists(anki.ANKI_DATA_FILE):
+    # Example: if anki_enabled and anki.ANKI_FILE and not os.path.exists(anki.ANKI_FILE):
     #     anki.save_anki_data({"cards": []}) # Create empty Anki file
 
     port = int(os.environ.get("PROJECTTRACKER_PORT", 0))
