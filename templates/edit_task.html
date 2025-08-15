@@ -5,7 +5,8 @@
 {% block window_title %}EDIT TASK{% endblock %}
 
 {% block window_controls %}
-<button class="control-button" onclick="window.close()">×</button>
+<a href="{{ url_for('view_project', project_id=project_id) }}" class="control-button">BACK TO PROJECT</a>
+<a href="{{ url_for('list_projects_by_category') }}" class="control-button">BACK TO PROJECTS</a>
 {% endblock %}
 
 {% block content %}
