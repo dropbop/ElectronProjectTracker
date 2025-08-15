@@ -4,11 +4,12 @@ This is an app for tracking projects and tasks associated with them. It also inc
 
 ---
 
-## What’s in here
+## What's in here
 
 - **Flask backend** (`app.py`, `templates/`, `static/`)
 - **Electron wrapper** (`electron/`) that spawns the backend and opens a desktop window
 - **Data files** live wherever you choose (default: your Documents folder when using the Electron app; configurable)
+- **Build automation** (`build-app.ps1`, `build-app.bat`) for one-click builds
 
 `.gitignore` excludes local Python installs, PyInstaller output, and Electron build output.
 
@@ -19,6 +20,29 @@ This is an app for tracking projects and tasks associated with them. It also inc
 You need:
 - **Python 3.11+** (3.13 works)
 - **Node.js (LTS)** for Electron (`node -v` / `npm -v` should print versions)
+
+### Automated Build (Recommended)
+
+Simply **double-click `build-app.bat`** in the repo root. This will:
+1. Clean up any previous builds
+2. Install/update Python dependencies
+3. Build the Flask backend into an exe
+4. Package everything with Electron
+5. Show you where the final installer is located
+
+The script provides colored output and clear error messages if anything goes wrong.
+
+**Optional build flags:**
+- Run PowerShell directly for more control: `.\build-app.ps1 -SkipCleanup -Verbose`
+  - `-SkipCleanup` - Don't delete previous builds
+  - `-SkipPipUpgrade` - Skip pip upgrade (faster if packages are current)
+  - `-Verbose` - Show detailed PyInstaller output
+
+---
+
+## Manual Build Process
+
+If you prefer to build manually or need to debug, here are the individual steps:
 
 **Run everything below from the repo root** (folder with `app.py` and the `electron/` folder).
 
@@ -53,14 +77,18 @@ From the repo root:
     npm run dist
 
 Result: `electron\dist\projecttracker-electron Portable.exe`  
-Double-click it. Use the **“Data Folder”** button in the title bar to pick where your JSON files should live.
+Double-click it. Use the **"Data Folder"** button in the title bar to pick where your JSON files should live.
 
-> Electron’s build config copies `..\dist\projecttracker-backend.exe` via `extraResources`. Make sure you completed step 1 before `npm run dist`.
+> Electron's build config copies `..\dist\projecttracker-backend.exe` via `extraResources`. Make sure you completed step 1 before `npm run dist`.
 
 ---
 
 ## Developer Workflow
 
+### Quick rebuild
+Just double-click `build-app.bat` for a complete rebuild.
+
+### Manual rebuilds
 - **Change Python/HTML/CSS → rebuild backend:**
 
       # repo root
@@ -91,13 +119,11 @@ Double-click it. Use the **“Data Folder”** button in the title bar to pick w
 ## Releasing a build
 
 1. Bump version in `electron/package.json` (`"version": "x.y.z"`).
-2. Rebuild:
+2. Rebuild using the automated script:
 
-       # repo root
-       python -m PyInstaller app.py --onefile --add-data "templates;templates" --add-data "static;static" --name projecttracker-backend
-       cd .\electron\
-       npm install
-       npm run dist
+       # Just double-click build-app.bat
+       # OR run from PowerShell:
+       .\build-app.ps1
 
 3. Test `electron\dist\projecttracker-electron Portable.exe`.
 4. Create a GitHub Release and upload the EXE as an asset (optionally attach checksums).
