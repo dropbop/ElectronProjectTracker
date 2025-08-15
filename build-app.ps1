@@ -5,9 +5,9 @@
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 param(
-    [switch]$SkipCleanup = $false,
-    [switch]$SkipPipUpgrade = $false,
-    [switch]$Verbose = $false
+    [switch]$SkipCleanup,
+    [switch]$SkipPipUpgrade,
+    [switch]$Verbose
 )
 
 # Get the script's directory (where this .ps1 file lives)
@@ -174,7 +174,7 @@ if (-not (Test-Path "package.json")) {
 }
 
 Write-ColorOutput "  - Installing npm dependencies..." "Gray"
-& npm install
+cmd /c "npm install"
 if ($LASTEXITCODE -ne 0) {
     Handle-Error "npm install failed"
 }
@@ -191,7 +191,7 @@ if (Test-Path $backendExePath) {
 }
 
 Write-ColorOutput "  - Running Electron builder..." "Gray"
-& npm run dist
+cmd /c "npm run dist"
 if ($LASTEXITCODE -ne 0) {
     Handle-Error "Electron build failed"
 }
