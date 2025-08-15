@@ -1,6 +1,10 @@
 # Flask to Electron Build Automation Script
 # This script automates the process of building a Flask app into an exe and packaging it with Electron
 
+# Set execution policy for the current process to ensure sub-scripts like npm can run.
+# This makes the script runnable directly, not just from the .bat file.
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+
 param(
     [switch]$SkipCleanup = $false,
     [switch]$SkipPipUpgrade = $false,
