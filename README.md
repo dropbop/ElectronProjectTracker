@@ -47,6 +47,8 @@ Result: `dist\projecttracker-backend.exe`
 From the repo root:
 
     cd .\electron\
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+    
     npm install
     npm run dist
 
