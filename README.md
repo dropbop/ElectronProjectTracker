@@ -44,7 +44,7 @@ The script provides colored output and clear error messages if anything goes wro
 
 If you prefer to build manually or need to debug, here are the individual steps:
 
-**Run everything below from the repo root** (folder with `app.py` and the `electron/` folder).
+**Run everything below from the repo root** 
 
 ### 1) Build the backend EXE (PyInstaller)
 
@@ -55,7 +55,7 @@ Install deps **into this repo** (no `--user`, no venv required):
 
 Build the single-file backend EXE (bundles templates/static):
 
-    python -m PyInstaller app.py --onefile --add-data "templates;templates" --add-data "static;static" --name projecttracker-backend
+    python -m PyInstaller src/app.py --onefile --add-data "templates;templates" --add-data "static;static" --name projecttracker-backend
 
 Result: `dist\projecttracker-backend.exe`
 
@@ -92,14 +92,14 @@ Just double-click `build-app.bat` for a complete rebuild.
 - **Change Python/HTML/CSS → rebuild backend:**
 
       # repo root
-      python -m PyInstaller app.py --onefile --add-data "templates;templates" --add-data "static;static" --name projecttracker-backend
+      python -m PyInstaller src/app.py --onefile --add-data "templates;templates" --add-data "static;static" --name projecttracker-backend
 
 - **Change Electron code → rebuild Electron:**
 
       cd .\electron\
       npm run dist
 
-- **Optional dev run for Electron (uses your system Python to start app.py):**
+- **Optional dev run for Electron (uses your system Python to start src/app.py):**
 
       cd .\electron\
       npm start
