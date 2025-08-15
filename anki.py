@@ -3,7 +3,9 @@ import os
 import uuid
 from datetime import datetime, timedelta
 
-ANKI_FILE = "anki.json"
+DATA_DIR = os.getenv("PROJECTTRACKER_DATA_DIR", os.getcwd())
+os.makedirs(DATA_DIR, exist_ok=True)
+ANKI_FILE = os.path.join(DATA_DIR, "anki.json")
 
 def load_anki_data():
     """Loads flashcard data from JSON file."""
@@ -157,5 +159,5 @@ def process_card_review(card_id, rating):
         # Calculate next review date
         next_date = datetime.now() + timedelta(days=card["interval"])
         card["review_date"] = next_date.strftime("%Y-%m-%d")
-        
+
         save_anki_data(data)
