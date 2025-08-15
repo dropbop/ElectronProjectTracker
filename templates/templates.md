@@ -18,7 +18,7 @@ graph TD
     Projects -->|VIEW CALENDAR| Calendar
 
     ProjectDetail -->|EDIT PROJECT| EditProject
-    ProjectDetail -->|BACK TO {status} PROJECTS| Projects
+    ProjectDetail -->|"BACK TO [status] PROJECTS"| Projects
 
     AddProject -->|BACK TO PROJECTS| Projects
 
