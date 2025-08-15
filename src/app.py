@@ -1,20 +1,25 @@
-from flask import Flask, render_template, request, redirect, url_for, abort, session
+from flask import Flask, render_template, request, redirect, url_for, abort
 import os
 import sys
 from operator import itemgetter
 from datetime import datetime, timedelta
 
-from .data_handler import (
+# --- enable absolute imports even if someone runs `python src/app.py` ---
+if __package__ is None and __name__ == "__main__":
+    # add repo root (parent of /src) to sys.path so `import src.*` works
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# ---- absolute imports so PyInstaller won't choke ----
+from src.data_handler import (
     get_project, get_projects_by_category, create_project, update_project,
     create_task, update_task, get_all_tasks, add_project_update, delete_project_update,
     load_data
 )
-# Use relative import when importing from within the same package
-from . import utils
+import src.utils as utils
 
-# --- Anki Imports ---
+# --- Anki Imports (optional module) ---
 try:
-    from .anki import (
+    from src.anki import (
         load_anki_data, save_anki_data, create_card, get_card, update_card,
         delete_card, get_due_cards, process_card_review
     )
@@ -22,7 +27,6 @@ try:
 except ImportError:
     print("WARNING: Anki module not found. Anki features will be disabled.")
     anki_enabled = False
-
     def load_anki_data(): return {"cards": []}
     def save_anki_data(data): pass
     def create_card(f, b, r): pass
@@ -33,33 +37,35 @@ except ImportError:
     def process_card_review(id, r): pass
 # --- End Anki Imports ---
 
-# Use __file__ / __name__
-base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+# In a PyInstaller EXE, assets are unpacked to sys._MEIPASS.
+# In dev, our templates/static live in the PROJECT ROOT (parent of /src).
+if hasattr(sys, "_MEIPASS"):
+    base_dir = sys._MEIPASS
+else:
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 app = Flask(
     __name__,
     template_folder=os.path.join(base_dir, "templates"),
     static_folder=os.path.join(base_dir, "static"),
 )
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_default_secret_key")
-
 STATIC_FOLDER = app.static_folder
 
 
 @app.context_processor
 def inject_css_and_static_folder():
-    """Injects CSS files and STATIC_FOLDER into the template context."""
+    """Inject CSS file list and STATIC_FOLDER into templates."""
     return {**utils.inject_css_files(STATIC_FOLDER), 'STATIC_FOLDER': STATIC_FOLDER}
 
 
 @app.route("/__health")
 def health():
-    """Simple health check endpoint for Electron to poll."""
     return "ok"
 
 
 @app.route('/set_style', methods=['POST'])
 def set_style_route():
-    """Route to set the selected stylesheet in the session."""
     utils.set_style(request, STATIC_FOLDER)
     return redirect(request.referrer)
 
@@ -67,7 +73,6 @@ def set_style_route():
 
 @app.route("/add_project", methods=["GET", "POST"])
 def add_project():
-    """Displays the form to add a new project and handles project creation."""
     if request.method == "POST":
         title = request.form["title"]
         description = request.form.get("description", "")
@@ -76,75 +81,68 @@ def add_project():
         status = request.form.get("status", "active")
         create_project(title, description, start_date, target_completion_date, status)
         return redirect(url_for("list_projects_by_category", category=status))
-
     return render_template("add_project.html")
 
 
 @app.route("/project/<project_id>")
 def view_project(project_id):
-    """Displays the details of a specific project."""
     project = get_project(project_id, task_status='active')
-    if project:
-        sort_by = request.args.get('sort_by', 'due_date')
-        order = request.args.get('order', 'asc')
-        selected_task_statuses = request.args.getlist('task_status')
+    if not project:
+        abort(404)
 
-        # Sort tasks based on parameters
+    sort_by = request.args.get('sort_by', 'due_date')
+    order = request.args.get('order', 'asc')
+    selected_task_statuses = request.args.getlist('task_status')
+
+    if sort_by == 'due_date':
+        project['tasks'].sort(
+            key=lambda x: x.get('target_completion_date', '') or '9999-12-31',
+            reverse=(order == 'desc')
+        )
+
+    if selected_task_statuses:
+        all_project_tasks = get_project(project_id)['tasks']
+        project['tasks'] = [t for t in all_project_tasks if t['status'] in selected_task_statuses]
         if sort_by == 'due_date':
             project['tasks'].sort(
                 key=lambda x: x.get('target_completion_date', '') or '9999-12-31',
                 reverse=(order == 'desc')
             )
-
-        # If other statuses are selected, override the default filtering
-        if selected_task_statuses:
-            all_project_tasks = get_project(project_id)['tasks']
-            project['tasks'] = [task for task in all_project_tasks if task['status'] in selected_task_statuses]
-            if sort_by == 'due_date':
-                project['tasks'].sort(
-                    key=lambda x: x.get('target_completion_date', '') or '9999-12-31',
-                    reverse=(order == 'desc')
-                )
-        else:
-            selected_task_statuses = ['active']  # Set default for template rendering
-
-        return render_template(
-            "project_detail.html",
-            project_id=project_id,
-            project=project,
-            sort_by=sort_by,
-            order=order,
-            selected_task_statuses=selected_task_statuses
-        )
     else:
-        abort(404)
+        selected_task_statuses = ['active']
+
+    return render_template(
+        "project_detail.html",
+        project_id=project_id,
+        project=project,
+        sort_by=sort_by,
+        order=order,
+        selected_task_statuses=selected_task_statuses
+    )
 
 
 @app.route("/add_task/<project_id>", methods=["POST"])
 def add_task(project_id):
-    """Handles adding a new task to a specific project."""
     project = get_project(project_id)
-    if project:
-        description = request.form["description"]
-        additional_info = request.form.get("additional_info", "")
-        start_date = request.form.get("start_date")
-        target_completion_date = request.form.get("target_completion_date")
-        actual_completion_date = request.form.get("actual_completion_date")
-        status = request.form["status"]
-        create_task(
-            project_id, description, additional_info, start_date,
-            target_completion_date, actual_completion_date, status
-        )
-        return redirect(url_for("view_project", project_id=project_id))
-    else:
+    if not project:
         abort(404)
 
+    description = request.form["description"]
+    additional_info = request.form.get("additional_info", "")
+    start_date = request.form.get("start_date")
+    target_completion_date = request.form.get("target_completion_date")
+    actual_completion_date = request.form.get("actual_completion_date")
+    status = request.form["status"]
 
-@app.route("/", defaults={"category": "active"})  # Make project list the default home page
+    create_task(project_id, description, additional_info, start_date,
+                target_completion_date, actual_completion_date, status)
+    return redirect(url_for("view_project", project_id=project_id))
+
+
+@app.route("/", defaults={"category": "active"})
 @app.route("/projects", defaults={"category": "active"})
 @app.route("/projects/<category>")
 def list_projects_by_category(category):
-    """Lists projects, optionally filtered by category."""
     valid_categories = ["active", "on hold", "complete", "archived", "ongoing"]
     if category not in valid_categories:
         return redirect(url_for("list_projects_by_category", category="active"))
@@ -157,9 +155,11 @@ def list_projects_by_category(category):
     if sort_by == 'start_date':
         projects.sort(key=itemgetter('start_date'), reverse=(sort_order == 'desc'))
     elif sort_by == 'target_completion_date':
-        projects.sort(key=lambda p: p.get('target_completion_date') or '9999-12-31', reverse=(sort_order == 'desc'))
+        projects.sort(key=lambda p: p.get('target_completion_date') or '9999-12-31',
+                      reverse=(sort_order == 'desc'))
     elif sort_by == 'next_task_due_date':
-        projects.sort(key=lambda p: p.get('next_task_due_date', '9999-12-31'), reverse=(sort_order == 'desc'))
+        projects.sort(key=lambda p: p.get('next_task_due_date', '9999-12-31'),
+                      reverse=(sort_order == 'desc'))
 
     return render_template(
         "projects.html",
@@ -173,7 +173,6 @@ def list_projects_by_category(category):
 
 @app.route('/project/<project_id>/edit', methods=['GET', 'POST'])
 def edit_project(project_id):
-    """Displays the form to edit a project and handles updating the project."""
     project = get_project(project_id)
     if not project:
         abort(404)
@@ -189,40 +188,33 @@ def edit_project(project_id):
         target_completion_date = request.form.get("target_completion_date")
         actual_completion_date = request.form.get("actual_completion_date")
 
-        # Handle updates
         update_ids = request.form.getlist("update_ids[]")
         update_texts = request.form.getlist("update_texts[]")
-        existing_updates_map = {update['id']: update['timestamp'] for update in project.get('updates', [])}
-        new_updates = []
-        for update_id, update_text in zip(update_ids, update_texts):
-            timestamp = existing_updates_map.get(update_id, datetime.now().isoformat())
-            new_updates.append({
-                'id': update_id,
-                'timestamp': timestamp,
-                'description': update_text
-            })
+        existing_updates_map = {u['id']: u['timestamp'] for u in project.get('updates', [])}
+        new_updates = [{
+            'id': uid,
+            'timestamp': existing_updates_map.get(uid, datetime.now().isoformat()),
+            'description': utxt
+        } for uid, utxt in zip(update_ids, update_texts)]
 
-        update_project(
-            project_id, title, description, status, start_date,
-            target_completion_date, actual_completion_date, new_updates
-        )
+        update_project(project_id, title, description, status, start_date,
+                       target_completion_date, actual_completion_date, new_updates)
         return redirect(url_for("view_project", project_id=project_id))
 
-    else:
-        tasks = project.get('tasks', [])
-        if sort_by == 'start_date':
-            tasks.sort(key=lambda x: x.get('start_date', '') or '9999-12-31', reverse=(order == 'desc'))
-        elif sort_by == 'status':
-            status_order = {'active': 0, 'on hold': 1, 'complete': 2, 'archived': 3, 'ongoing': 4}
-            tasks.sort(key=lambda x: status_order.get(x.get('status'), 999), reverse=(order == 'desc'))
-        project['tasks'] = tasks
+    tasks = project.get('tasks', [])
+    if sort_by == 'start_date':
+        tasks.sort(key=lambda x: x.get('start_date', '') or '9999-12-31', reverse=(order == 'desc'))
+    elif sort_by == 'status':
+        status_order = {'active': 0, 'on hold': 1, 'complete': 2, 'archived': 3, 'ongoing': 4}
+        tasks.sort(key=lambda x: status_order.get(x.get('status'), 999), reverse=(order == 'desc'))
+    project['tasks'] = tasks
 
-        return render_template('edit_project.html', project=project, sort_by=sort_by, order=order, show_delete_buttons=True)
+    return render_template('edit_project.html', project=project, sort_by=sort_by, order=order,
+                           show_delete_buttons=True)
 
 
 @app.route("/edit_task/<project_id>/<task_id>", methods=["GET", "POST"])
 def edit_task(project_id, task_id):
-    """Displays the form to edit a specific task and handles updating the task."""
     project = get_project(project_id)
     if not project:
         abort(404)
@@ -238,10 +230,8 @@ def edit_task(project_id, task_id):
         start_date = request.form.get("start_date")
         target_completion_date = request.form.get("target_completion_date")
         actual_completion_date = request.form.get("actual_completion_date")
-        update_task(
-            project_id, task_id, description, additional_info, status,
-            start_date, target_completion_date, actual_completion_date
-        )
+        update_task(project_id, task_id, description, additional_info, status,
+                    start_date, target_completion_date, actual_completion_date)
         return redirect(url_for("view_project", project_id=project_id))
 
     return render_template("edit_task.html", project_id=project_id, task=task)
@@ -249,55 +239,42 @@ def edit_task(project_id, task_id):
 
 @app.route('/tasks')
 def list_all_tasks():
-    """Lists all tasks with optional sorting and filtering."""
     sort_by = request.args.get('sort_by', 'due_date')
     order = request.args.get('order', 'asc')
     selected_project_statuses = request.args.getlist('project_status') or ['active', 'ongoing']
     selected_task_statuses = request.args.getlist('task_status') or ['active']
 
     tasks = get_all_tasks(sort_by, order, selected_project_statuses, selected_task_statuses)
-
-    return render_template(
-        'tasks.html',
-        tasks=tasks,
-        sort_by=sort_by,
-        order=order,
-        selected_project_statuses=selected_project_statuses,
-        selected_task_statuses=selected_task_statuses
-    )
+    return render_template('tasks.html', tasks=tasks, sort_by=sort_by, order=order,
+                           selected_project_statuses=selected_project_statuses,
+                           selected_task_statuses=selected_task_statuses)
 
 
 @app.route("/project/<project_id>/add_update", methods=["POST"])
 def add_update(project_id):
-    """Adds a new update to the specified project."""
     project = get_project(project_id)
-    if project:
-        update_text = request.form.get("update_text")
-        if update_text:
-            add_project_update(project_id, update_text)
-        return redirect(url_for("edit_project", project_id=project_id))
-    else:
+    if not project:
         abort(404)
+    update_text = request.form.get("update_text")
+    if update_text:
+        add_project_update(project_id, update_text)
+    return redirect(url_for("edit_project", project_id=project_id))
 
 
 @app.route("/project/<project_id>/delete_update/<update_id>", methods=["POST"])
 def delete_update(project_id, update_id):
-    """Deletes the specified update from the project."""
     project = get_project(project_id)
-    if project:
-        delete_project_update(project_id, update_id)
-        return redirect(url_for("edit_project", project_id=project_id))
-    else:
+    if not project:
         abort(404)
+    delete_project_update(project_id, update_id)
+    return redirect(url_for("edit_project", project_id=project_id))
 
 
 @app.route("/calendar")
 def productivity_calendar():
-    """Displays productivity heatmap calendar"""
     try:
         data = load_data()
         completion_dates = []
-
         for project in data.get('projects', []):
             if project.get('actual_completion_date'):
                 completion_dates.append(project['actual_completion_date'])
@@ -311,42 +288,30 @@ def productivity_calendar():
                 date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 date_counts[date] = date_counts.get(date, 0) + 1
             except (ValueError, TypeError):
-                print(f"Warning: Skipping invalid date format in calendar: {date_str}")
                 continue
 
         today = datetime.today().date()
-        num_weeks = 53
-        total_days = num_weeks * 7
+        total_days = 53 * 7
         start_date = today - timedelta(days=total_days - 1)
-
         calendar_dates = [start_date + timedelta(days=i) for i in range(total_days)]
         if not calendar_dates:
             calendar_dates = [today]
-
     except Exception as e:
         print(f"Error generating calendar data: {e}")
         date_counts = {}
         today = datetime.today().date()
-        num_weeks = 53
-        total_days = num_weeks * 7
+        total_days = 53 * 7
         start_date = today - timedelta(days=total_days - 1)
         calendar_dates = [start_date + timedelta(days=i) for i in range(total_days)]
 
-    return render_template(
-        "calendar.html",
-        date_counts=date_counts,
-        calendar_dates=calendar_dates,
-        today=today
-    )
+    return render_template("calendar.html", date_counts=date_counts,
+                           calendar_dates=calendar_dates, today=today)
 
-# --- End Project Management Routes ---
 
-# --- Anki Flashcard Routes ---
-
+# --- Anki Routes ---
 if anki_enabled:
     @app.route("/anki")
     def anki_review():
-        """Shows flashcards that are due for review."""
         try:
             due_cards = get_due_cards()
             return render_template("anki.html", due_cards=due_cards)
@@ -356,31 +321,25 @@ if anki_enabled:
 
     @app.route("/anki/review/<card_id>", methods=["POST"])
     def review_card(card_id):
-        """Processes a flashcard review."""
         try:
             rating = int(request.form["rating"])
             process_card_review(card_id, rating)
             return redirect(url_for("anki_review"))
-        except ValueError:
-            return redirect(url_for("anki_review"))
         except Exception as e:
-            print(f"Error processing Anki card review for {card_id}: {e}")
+            print(f"Error processing Anki card review: {e}")
             return redirect(url_for("anki_review"))
 
     @app.route("/anki/manage")
     def manage_cards():
-        """Lists all flashcards for management."""
         try:
             data = load_anki_data()
-            cards = data.get("cards", [])
-            return render_template("edit_anki.html", cards=cards, mode='list')
+            return render_template("edit_anki.html", cards=data.get("cards", []), mode='list')
         except Exception as e:
-            print(f"Error loading Anki data for management: {e}")
+            print(f"Error loading Anki data: {e}")
             return render_template("edit_anki.html", cards=[], mode='list', error="Could not load card data.")
 
     @app.route("/anki/add", methods=["GET", "POST"])
     def add_card():
-        """Adds a new flashcard."""
         if request.method == "POST":
             try:
                 front = request.form["front"]
@@ -395,43 +354,37 @@ if anki_enabled:
 
     @app.route("/anki/edit/<card_id>", methods=["GET", "POST"])
     def edit_card(card_id):
-        """Edits an existing flashcard."""
         try:
             card = get_card(card_id)
             if not card:
                 abort(404)
-
             if request.method == "POST":
                 front = request.form["front"]
                 back = request.form["back"]
                 reverse = "reverse" in request.form
                 update_card(card_id, front, back, reverse)
                 return redirect(url_for("manage_cards"))
-
             return render_template("edit_anki.html", card=card, mode='edit')
-
         except Exception as e:
-            print(f"Error editing Anki card {card_id}: {e}")
+            print(f"Error editing card {card_id}: {e}")
             return redirect(url_for("manage_cards"))
 
     @app.route("/anki/delete/<card_id>", methods=["POST"])
     def delete_card_route(card_id):
-        """Deletes a flashcard."""
         try:
             delete_card(card_id)
             return redirect(url_for("manage_cards"))
         except Exception as e:
-            print(f"Error deleting Anki card {card_id}: {e}")
+            print(f"Error deleting card {card_id}: {e}")
             return redirect(url_for("manage_cards"))
 else:
     @app.route("/anki")
     @app.route("/anki/manage")
     @app.route("/anki/add")
     @app.route("/anki/edit/<card_id>")
-    def anki_disabled(*args, **kwargs):
+    def anki_disabled(*_args, **_kwargs):
         return "Anki functionality is currently disabled because the 'anki' module could not be found.", 404
 
-# --- End Anki Flashcard Routes ---
 
 if __name__ == "__main__":
     port = int(os.environ.get("PROJECTTRACKER_PORT", 0))
