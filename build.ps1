@@ -1,112 +1,129 @@
 param(
-  [string]$RepoRoot = $(Split-Path -Parent $PSCommandPath),
-  [string]$Version,
-  [switch]$NoClean,
-  [switch]$DryRun
+  [string]$RepoRoot = $(Split-Path -Parent $PSCommandPath),  # path to repo (defaults to this script's folder)
+  [switch]$DryRun,                                          # preview actions only
+  [switch]$SkipInstall                                      # skip pip/npm installs
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $ConfirmPreference = "None"
 
-function Remove-PathSafe([string]$path) {
-  if (Test-Path -LiteralPath $path) {
-    if ($DryRun) { Write-Host "  (dry-run) Would remove $path"; return }
-    Write-Host "  Removing $path"
-    Remove-Item -LiteralPath $path -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+# ---- CONFIG: filenames (change only if you rename binaries) ----
+$BackendExeName   = "projecttracker-backend.exe"
+$ElectronExeGlob  = "projecttracker-electron*.exe"
+
+# ---- Helpers ----
+function Say($msg) { Write-Host $msg }
+function Do($cmd, $args) {
+  Say ">> $cmd $($args -join ' ')"
+  if ($DryRun) { Say "   (dry-run) Skipping exec"; return }
+  & $cmd @args
+  if ($LASTEXITCODE -ne 0) { throw "'$cmd' failed with exit code $LASTEXITCODE" }
+}
+function Remove-FileIfExists([string]$path) {
+  if (Test-Path -LiteralPath $path -PathType Leaf) {
+    if ($DryRun) { Say "   (dry-run) Would remove $path"; return }
+    Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    Say "   Removed $path"
+  } else {
+    Say "   (skip) Not found: $path"
   }
 }
 
-function Ensure-File([string]$path, [string]$msg) {
-  if (-not (Test-Path -LiteralPath $path)) { throw $msg }
-}
+# ---- Start ----
+Say "=== ProjectTracker Build (safe) ==="
+Say "RepoRoot: $RepoRoot"
 
-function Run([string]$cmd, [string[]]$args) {
-  Write-Host ">> $cmd $($args -join ' ')"
-  if ($DryRun) { Write-Host "  (dry-run) Skipping exec"; return }
-  $p = Start-Process -FilePath $cmd -ArgumentList $args -NoNewWindow -Wait -PassThru
-  if ($p.ExitCode -ne 0) { throw "'$cmd' failed with exit code $($p.ExitCode)" }
-}
-
-Write-Host "=== ProjectTracker Build ==="
-Write-Host "RepoRoot: $RepoRoot"
-
-Ensure-File (Join-Path $RepoRoot "app.py") "Could not find app.py in $RepoRoot"
-Ensure-File (Join-Path $RepoRoot "electron\package.json") "Could not find electron\package.json"
+# Sanity checks
+if (-not (Test-Path (Join-Path $RepoRoot "app.py"))) { throw "app.py not found in $RepoRoot" }
+if (-not (Test-Path (Join-Path $RepoRoot "electron\package.json"))) { throw "electron\package.json not found" }
 
 Push-Location $RepoRoot
 try {
-  if (-not $NoClean) {
-    Write-Host "`n[1/5] Cleaning previous outputs (whitelist only)..."
-    # PyInstaller outputs
-    Remove-PathSafe (Join-Path $RepoRoot "build")
-    Remove-PathSafe (Join-Path $RepoRoot "dist")
-    Get-ChildItem -LiteralPath $RepoRoot -Filter "*.spec" -File -ErrorAction SilentlyContinue | ForEach-Object {
-      if ($DryRun) { Write-Host "  (dry-run) Would remove $($_.FullName)" }
-      else { Remove-Item -LiteralPath $_.FullName -Force -Confirm:$false }
-    }
-    Get-ChildItem -LiteralPath $RepoRoot -Include "warn-*.txt","*.toc","*.pkg" -File -ErrorAction SilentlyContinue | ForEach-Object {
-      if ($DryRun) { Write-Host "  (dry-run) Would remove $($_.FullName)" }
-      else { Remove-Item -LiteralPath $_.FullName -Force -Confirm:$false }
-    }
+  # Paths
+  $backendExe = Join-Path $RepoRoot "dist\$BackendExeName"
+  $electronDir = Join-Path $RepoRoot "electron"
+  $electronDist = Join-Path $electronDir "dist"
 
-    # Electron outputs (NOTE: not deleting the electron folder itself)
-    Remove-PathSafe (Join-Path $RepoRoot "electron\dist")
-    Remove-PathSafe (Join-Path $RepoRoot "electron\out")
-    Remove-PathSafe (Join-Path $RepoRoot "electron\build")
-    Remove-PathSafe (Join-Path $RepoRoot "electron\.cache")
-    # Optional: clear node_modules to force a clean npm ci (commented out)
-    # Remove-PathSafe (Join-Path $RepoRoot "electron\node_modules")
+  # 1) Clean ONLY the two build outputs
+  Say "`n[1/4] Cleaning build outputs (only the two EXEs)"
+  Remove-FileIfExists $backendExe
+  if (Test-Path $electronDist) {
+    $oldElectronExes = Get-ChildItem -LiteralPath $electronDist -Filter $ElectronExeGlob -File -ErrorAction SilentlyContinue
+    if ($oldElectronExes) {
+      foreach ($f in $oldElectronExes) { Remove-FileIfExists $f.FullName }
+    } else {
+      Say "   (skip) No $ElectronExeGlob found in $electronDist"
+    }
   } else {
-    Write-Host "`n[1/5] Skipping clean (NoClean)."
+    Say "   (skip) No electron dist folder yet: $electronDist"
   }
 
-  Write-Host "`n[2/5] Preparing Python..."
-  Run "python" @("-m","pip","install","--upgrade","pip","setuptools","wheel")
-  Run "python" @("-m","pip","install","flask","pyinstaller")
+  # 2) Python deps
+  if (-not $SkipInstall) {
+    Say "`n[2/4] Ensuring Python deps"
+    Do "python" @("-m","pip","install","--upgrade","pip","setuptools","wheel")
+    Do "python" @("-m","pip","install","flask","pyinstaller")
+  } else {
+    Say "`n[2/4] Skipping Python installs (--SkipInstall)"
+  }
 
-  Write-Host "`n[3/5] Building backend with PyInstaller..."
+  # 3) Build backend exe
+  Say "`n[3/4] Building backend with PyInstaller"
   $pyiArgs = @(
-    "app.py","--onefile",
+    "-m","PyInstaller",
+    "app.py",
+    "--onefile",
     "--add-data","templates;templates",
     "--add-data","static;static",
     "--name","projecttracker-backend"
   )
-  Run "python" @("-m","PyInstaller") + $pyiArgs
+  Do "python" $pyiArgs
 
-  $backendExe = Join-Path $RepoRoot "dist\projecttracker-backend.exe"
-  Ensure-File $backendExe "PyInstaller build missing: $backendExe"
-
-  if ($Version) {
-    Write-Host "`n[3.5/5] Bumping Electron version to $Version..."
-    $pkgPath = Join-Path $RepoRoot "electron\package.json"
-    $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
-    $pkg.version = $Version
-    ($pkg | ConvertTo-Json -Depth 100) | Set-Content -Path $pkgPath -Encoding UTF8
+  if (-not $DryRun) {
+    if (-not (Test-Path $backendExe)) { throw "PyInstaller output missing: $backendExe" }
+    Say "   Built: $backendExe"
+  } else {
+    Say "   (dry-run) Would verify: $backendExe"
   }
 
-  Write-Host "`n[4/5] Building Electron app..."
-  Push-Location (Join-Path $RepoRoot "electron")
+  # 4) Package Electron
+  Say "`n[4/4] Packaging Electron app"
+  Push-Location $electronDir
   try {
-    if (-not $DryRun) { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force | Out-Null }
-    if (Test-Path ".\package-lock.json") { Run "npm" @("ci") } else { Run "npm" @("install") }
-    Run "npm" @("run","dist")
-  } finally { Pop-Location }
-
-  Write-Host "`n[5/5] Done."
-  Write-Host "Backend EXE : $backendExe"
-  $electronDist = Join-Path $RepoRoot "electron\dist"
-  if (Test-Path $electronDist) {
-    $portable = Get-ChildItem -LiteralPath $electronDist -Filter "projecttracker-electron*.exe" -File -ErrorAction SilentlyContinue |
-      Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if ($portable) {
-      Write-Host "Electron EXE: $($portable.FullName)"
-      if (-not $DryRun) {
-        $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $portable.FullName
-        Write-Host "SHA256      : $($hash.Hash)"
-        Invoke-Item $electronDist
-      }
+    if (-not $SkipInstall) {
+      # Allow npm.ps1 in locked environments
+      if (-not $DryRun) { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force | Out-Null }
+      if (Test-Path ".\package-lock.json") { Do "npm" @("ci") } else { Do "npm" @("install") }
+    } else {
+      Say "   Skipping npm install (--SkipInstall)"
     }
+
+    # Ensure no stale EXEs right before packaging (again, just the EXEs)
+    if (Test-Path $electronDist) {
+      $oldElectronExes = Get-ChildItem -LiteralPath $electronDist -Filter $ElectronExeGlob -File -ErrorAction SilentlyContinue
+      foreach ($f in $oldElectronExes) { Remove-FileIfExists $f.FullName }
+    }
+
+    Do "npm" @("run","dist")
+
+    if (-not $DryRun) {
+      $newExe = Get-ChildItem -LiteralPath $electronDist -Filter $ElectronExeGlob -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+      if ($newExe) {
+        Say "   Electron EXE: $($newExe.FullName)"
+      } else {
+        Say "   WARNING: Electron EXE not found in $electronDist"
+      }
+    } else {
+      Say "   (dry-run) Would locate $ElectronExeGlob in $electronDist"
+    }
+  } finally {
+    Pop-Location
   }
+
+  Say "`nDone."
 }
-finally { Pop-Location }
+finally {
+  Pop-Location
+}
