@@ -109,7 +109,7 @@ Write-ColorOutput "  OK: Python environment ready" "Green"
 Write-ColorOutput "`n[3/5] Building Flask application with PyInstaller..." "Yellow"
 
 # Check if app.py exists
-$appPyPath = Join-Path $scriptDir "app.py"
+$appPyPath = Join-Path $scriptDir "src/app.py"
 if (-not (Test-Path $appPyPath)) {
     Handle-Error "app.py not found in $scriptDir"
 }
@@ -132,7 +132,7 @@ if (Test-Path $staticPath) {
 Write-ColorOutput "  - Running PyInstaller..." "Gray"
 $pyInstallerArgs = @(
     "-m", "PyInstaller",
-    "app.py",
+    "src/app.py",
     "--onefile",
     "--name", "projecttracker-backend"
 )

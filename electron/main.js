@@ -20,7 +20,7 @@ async function startBackend() {
     const exe = path.join(process.resourcesPath, 'projecttracker-backend.exe');
     backend = spawn(exe, [], { env });
   } else {
-    const script = path.join(__dirname, '..', 'app.py');
+    const script = path.join(__dirname, '..', 'src/app.py');
     const python = process.platform === 'win32' ? 'python' : 'python3';
     backend = spawn(python, [script], { env });
   }

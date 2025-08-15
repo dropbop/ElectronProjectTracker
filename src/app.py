@@ -3,17 +3,17 @@ import os
 import sys
 from operator import itemgetter
 from datetime import datetime, timedelta
-from data_handler import (
+from src.data_handler import (
     get_project, get_projects_by_category, create_project, update_project,
     create_task, update_task, get_all_tasks, add_project_update, delete_project_update,
     load_data  # Assuming load_data is in data_handler.py
 )
-import utils  # Import the utils module
+import src.utils  # Import the utils module
 
 # --- Anki Imports ---
 # Assuming these functions exist in an 'anki.py' file or similar module
 try:
-    from anki import (
+    from src.anki import (
         load_anki_data, save_anki_data, create_card, get_card, update_card,
         delete_card, get_due_cards, process_card_review
     )
