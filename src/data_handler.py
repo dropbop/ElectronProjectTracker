@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime
 
-from src.safe_io import atomic_write_json
+from .safe_io import atomic_write_json
 
 DATA_DIR = os.getenv("PROJECTTRACKER_DATA_DIR", os.getcwd())
 os.makedirs(DATA_DIR, exist_ok=True)
