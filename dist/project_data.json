@@ -1,0 +1,15 @@
+{
+    "projects": [
+        {
+            "id": "0fc3bab7a5564c1195ede6eecf1660db",
+            "title": "testing title",
+            "description": "testing description",
+            "start_date": "2222-01-01",
+            "target_completion_date": "3333-02-02",
+            "actual_completion_date": null,
+            "status": "active",
+            "updates": [],
+            "tasks": []
+        }
+    ]
+}
