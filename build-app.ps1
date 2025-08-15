@@ -2,7 +2,6 @@
 # This script automates the process of building a Flask app into an exe and packaging it with Electron
 
 # Set execution policy for the current process to ensure sub-scripts like npm can run.
-# This makes the script runnable directly, not just from the .bat file.
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 param(
@@ -54,7 +53,7 @@ if (-not $SkipCleanup) {
         Write-ColorOutput "  - Removing old Python dist folder..." "Gray"
         try {
             Remove-Item -Path $distPythonPath -Recurse -Force -ErrorAction Stop
-            Write-ColorOutput "  ✓ Python dist cleaned" "Green"
+            Write-ColorOutput "  OK: Python dist cleaned" "Green"
         } catch {
             Write-ColorOutput "  ! Warning: Could not fully clean Python dist: $_" "Yellow"
         }
@@ -79,7 +78,7 @@ if (-not $SkipCleanup) {
         Write-ColorOutput "  - Removing old Electron dist folder..." "Gray"
         try {
             Remove-Item -Path $electronDistPath -Recurse -Force -ErrorAction Stop
-            Write-ColorOutput "  ✓ Electron dist cleaned" "Green"
+            Write-ColorOutput "  OK: Electron dist cleaned" "Green"
         } catch {
             Write-ColorOutput "  ! Warning: Could not fully clean Electron dist: $_" "Yellow"
         }
@@ -104,7 +103,7 @@ Write-ColorOutput "  - Installing/upgrading Flask and PyInstaller..." "Gray"
 if ($LASTEXITCODE -ne 0) {
     Handle-Error "Failed to install Flask/PyInstaller"
 }
-Write-ColorOutput "  ✓ Python environment ready" "Green"
+Write-ColorOutput "  OK: Python environment ready" "Green"
 
 # Step 3: Build Flask application with PyInstaller
 Write-ColorOutput "`n[3/5] Building Flask application with PyInstaller..." "Yellow"
@@ -156,7 +155,7 @@ if (-not (Test-Path $backendExePath)) {
     Handle-Error "Backend exe was not created at $backendExePath"
 }
 
-Write-ColorOutput "  ✓ Flask app built successfully" "Green"
+Write-ColorOutput "  OK: Flask app built successfully" "Green"
 Write-ColorOutput "    Output: $backendExePath" "Gray"
 
 # Step 4: Change to Electron directory and install dependencies
@@ -179,7 +178,7 @@ Write-ColorOutput "  - Installing npm dependencies..." "Gray"
 if ($LASTEXITCODE -ne 0) {
     Handle-Error "npm install failed"
 }
-Write-ColorOutput "  ✓ Electron dependencies installed" "Green"
+Write-ColorOutput "  OK: Electron dependencies installed" "Green"
 
 # Step 5: Build Electron application
 Write-ColorOutput "`n[5/5] Building Electron application..." "Yellow"
@@ -202,7 +201,7 @@ $installerPattern = Join-Path $electronDistPath "*.exe"
 $installer = Get-ChildItem -Path $installerPattern -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if ($installer) {
-    Write-ColorOutput "  ✓ Electron app built successfully" "Green"
+    Write-ColorOutput "  OK: Electron app built successfully" "Green"
     Write-ColorOutput "    Output: $($installer.FullName)" "Gray"
 } else {
     Write-ColorOutput "  ! Warning: Could not find installer in $electronDistPath" "Yellow"
