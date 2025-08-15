@@ -5,7 +5,8 @@
 {% block window_title %}EDIT PROJECT - {{ project.title | upper }}{% endblock %}
 
 {% block window_controls %}
-<button class="control-button" onclick="window.close()">×</button>
+<a href="{{ url_for('view_project', project_id=project.id) }}" class="control-button">BACK TO PROJECT</a>
+<a href="{{ url_for('list_projects_by_category', category=project.status) }}" class="control-button">BACK TO PROJECTS</a>
 {% endblock %}
 
 {% block content %}
@@ -44,7 +45,9 @@
                     <textarea id="update-{{ update.id }}" name="update_texts[]" class="form-textarea">{{ update.description }}</textarea>
                 </p>
                 {% if show_delete_buttons %}
-                    <a href="{{ url_for('delete_update', project_id=project.id, update_id=update.id) }}" class="delete-button">DELETE</a>
+                <form method="post" action="{{ url_for('delete_update', project_id=project.id, update_id=update.id) }}" style="display:inline;">
+                    <button type="submit" class="primary-button">DELETE</button>
+                </form>
                 {% endif %}
             </div>
         {% else %}
